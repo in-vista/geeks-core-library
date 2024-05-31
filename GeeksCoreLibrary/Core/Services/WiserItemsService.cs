@@ -77,6 +77,7 @@ namespace GeeksCoreLibrary.Core.Services
         public const string AutoIncrementPropertySuffix = "_auto_increment";
         public const string SaveValueAsItemLinkKey = "saveValueAsItemLink";
         public const string CurrentItemIsDestinationIdKey = "currentItemIsDestinationId";
+        public const string EntityTypeKey = "entityType";
         public const string LinkTypeNumberKey = "linkTypeNumber";
         public const string DefaultInputType = "text";
         public const string LinkOrderingFieldName = "__ordering";
@@ -227,6 +228,11 @@ namespace GeeksCoreLibrary.Core.Services
             if (wiserItem.ModuleId <= 0 && entityTypeSettings != null)
             {
                 wiserItem.ModuleId = entityTypeSettings.ModuleId;
+            }
+            
+            if (!entityTypeSettings!.SaveHistory)
+            {
+                saveHistory = false;
             }
       
             var retries = 0;
@@ -637,6 +643,11 @@ VALUES (?newId, ?parentId, ?newOrderNumber, ?linkTypeNumber)");
             // Get the settings of the entity type.
             var entityTypeSettings = await wiserItemsService.GetEntityTypeSettingsAsync(wiserItem.EntityType, wiserItem.ModuleId);
             var tablePrefix = wiserItemsService.GetTablePrefixForEntity(entityTypeSettings);
+            
+            if (!entityTypeSettings!.SaveHistory)
+            {
+                saveHistory = false;
+            }
 
             var retries = 0;
             var transactionCompleted = false;
@@ -1035,10 +1046,10 @@ WHERE item.id = ?itemId");
                                         destinationIds.Add(integerValue);
                                     }
 
-                                    var linkTablePrefix = await GetTablePrefixForLinkAsync(linkTypeNumber, wiserItem.EntityType);
+                                    var currentItemIsDestinationId = fieldOptions[key].ContainsKey(CurrentItemIsDestinationIdKey) && (bool) fieldOptions[key][CurrentItemIsDestinationIdKey];
+                                    var linkTablePrefix = await GetTablePrefixForLinkAsync(linkTypeNumber, currentItemIsDestinationId ? Convert.ToString(fieldOptions[key][EntityTypeKey]) : wiserItem.EntityType);
 
                                     databaseConnection.AddParameter("linkTypeNumber", linkTypeNumber);
-                                    var currentItemIsDestinationId = fieldOptions[key].ContainsKey(CurrentItemIsDestinationIdKey) && (bool) fieldOptions[key][CurrentItemIsDestinationIdKey];
 
                                     // Delete any previous links that were added via this field.
                                     // NOTE: Here we make an assumption that the given linkTypeNumber is not used for anything else!
@@ -1229,7 +1240,7 @@ SET @saveHistory = ?saveHistoryGcl;
                             }
                             else
                             {
-                                updateQueryBuilder.Add($"UPDATE {WiserTableNames.WiserItemLinkDetail} SET `key` = ?key{counter}, `value` = ?value{counter}, `long_value` = ?longValue{counter}, `groupname` = ?groupName{counter}, language_code = ?languageCode{counter} WHERE id = ?itemDetailId{counter};");
+                                updateQueryBuilder.Add($"UPDATE {linkTablePrefix}{WiserTableNames.WiserItemLinkDetail} SET `key` = ?key{counter}, `value` = ?value{counter}, `long_value` = ?longValue{counter}, `groupname` = ?groupName{counter}, language_code = ?languageCode{counter} WHERE id = ?itemDetailId{counter};");
                             }
 
                             if (alsoSaveSeoValue)
@@ -1241,7 +1252,7 @@ SET @saveHistory = ?saveHistoryGcl;
                                 }
                                 else
                                 {
-                                    updateQueryBuilder.Add($"UPDATE {WiserTableNames.WiserItemLinkDetail} SET `key` = ?key{SeoPropertySuffix}{counter}, `value` = ?value{SeoPropertySuffix}{counter}, `long_value` = ?longValue{SeoPropertySuffix}{counter}, `groupname` = ?groupName{counter}, language_code = ?languageCode{counter} WHERE id = ?itemIDetailId{counter};");
+                                    updateQueryBuilder.Add($"UPDATE {linkTablePrefix}{WiserTableNames.WiserItemLinkDetail} SET `key` = ?key{SeoPropertySuffix}{counter}, `value` = ?value{SeoPropertySuffix}{counter}, `long_value` = ?longValue{SeoPropertySuffix}{counter}, `groupname` = ?groupName{counter}, language_code = ?languageCode{counter} WHERE id = ?itemDetailId{counter};");
                                 }
                             }
 
@@ -2898,6 +2909,7 @@ WHERE {String.Join(" AND ", where)}";
                         ShowOverviewTab = !dataRow.IsNull("show_overview_tab") && Convert.ToBoolean(dataRow["show_overview_tab"]),
                         ShowTitleField = !dataRow.IsNull("show_title_field") && Convert.ToBoolean(dataRow["show_title_field"]),
                         DisplayName = dataRow.Field<string>("displayName"),
+                        SaveHistory = dataRow.IsNull("save_history") || Convert.ToBoolean(dataRow["save_history"]),
                         DeleteAction = dataRow.Field<string>("delete_action")?.ToLowerInvariant() switch
                         {
                             null => EntityDeletionTypes.Archive,
