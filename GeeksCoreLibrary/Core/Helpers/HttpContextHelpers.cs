@@ -413,7 +413,9 @@ namespace GeeksCoreLibrary.Core.Helpers
         /// <returns>A <see cref="Uri"/> containing the base URL.</returns>
         public static Uri GetBaseUri(HttpContext httpContext)
         {
-            return new Uri($"{httpContext.Request.Scheme}://{httpContext.Request.Host.Value}{httpContext.Request.PathBase.Value}");
+            return httpContext?.Request == null
+                ? new Uri("https://localhost/")
+                : new Uri($"{httpContext.Request.Scheme}://{httpContext.Request.Host.Value}{httpContext.Request.PathBase.Value}");
         }
 
         public static ActionContext CreateActionContext(HttpContext httpContext)
@@ -444,7 +446,19 @@ namespace GeeksCoreLibrary.Core.Helpers
         /// <param name="httpContext">The <see cref="HttpContext"/>.</param>
         public static bool IsGclMiddleWarePage(HttpContext httpContext)
         {
-            return httpContext?.Request.Path != null && GclMiddleWarePages.Contains(httpContext.Request.Path);
+            if (httpContext?.Request.Path == null)
+            {
+                return false;
+            }
+
+            var path = httpContext.Request.Path.ToString();
+
+            if (path.EndsWith('/'))
+            {
+                return GclMiddleWarePages.Contains(path) || GclMiddleWarePages.Contains(path[..^1]);
+            }
+
+            return GclMiddleWarePages.Contains(path) || GclMiddleWarePages.Contains($"{path}/");
         }
     }
 }
